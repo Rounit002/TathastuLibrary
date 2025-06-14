@@ -5,7 +5,7 @@ import Sidebar from '../components/Sidebar';
 import api from '../services/api';
 import { toast } from 'sonner';
 import { Trash2, ArrowLeft, Edit, Printer } from 'lucide-react';
-import MansaLogo from "./MansaLogo.png";
+import Tathastulibrarylogo from "./Tathastulibrarylogo.jpg";
 
 // Updated Student interface to match api.ts exactly
 interface Student {
@@ -188,7 +188,7 @@ const StudentDetails: React.FC = () => {
 
               <div className="bg-white rounded-lg border border-gray-200 shadow-sm p-6">
                 <div className="flex justify-center mb-6 no-print">
-                  <img src={MansaLogo} alt="SDM Library Logo" className="max-w-[250px]" />
+                  <img src={Tathastulibrarylogo} alt="SDM Library Logo" className="max-w-[250px]" />
                 </div>
 
                 <h1 className="text-2xl font-bold text-gray-800 mb-6 no-print">Student Details</h1>
@@ -200,7 +200,7 @@ const StudentDetails: React.FC = () => {
                   </div>
                 )}
                 <img
-                src={MansaLogo}
+                src={Tathastulibrarylogo}
                 alt="SDM Library Logo"
                 className="print-logo hidden print:block"
                 />

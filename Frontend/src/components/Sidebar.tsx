@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Home, UserPlus, Building2, Calendar, Clock, Grid, DollarSign, Wallet, ShoppingBag, BarChart2, Settings, ChevronRight, UserCheck, AlertTriangle, Menu, X, LogOut, MapPin, Package } from 'lucide-react';
 import { useMediaQuery } from 'react-responsive';
-import logo from './MansaLogo.png';
+import logo from './TathustulibICON.jpg';
 
 interface SidebarProps {
   isCollapsed: boolean;
