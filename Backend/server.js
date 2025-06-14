@@ -34,7 +34,7 @@ app.use(cors({
   origin: function (origin, callback) {
     const allowedOrigins = [
       'http://localhost:8080',
-      'https://mansalibrary.onrender.com',
+      'https://tathastulibrary.onrender.com',
       'file://'
     ];
     if (!origin || allowedOrigins.includes(origin)) {
