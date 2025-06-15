@@ -194,10 +194,16 @@ const ExpiredMemberships = () => {
   };
 
   const handleRenewSubmit = async () => {
-    if (!selectedStudent || !startDate || !endDate || !emailInput || !phoneInput || !selectedShift || !totalFee || !selectedBranch) {
-      toast.error('Please fill all required fields');
+    // **FIX START**: Added stricter validation to match backend requirements
+    if (
+      !selectedStudent || !startDate || !endDate ||
+      !nameInput.trim() || !phoneInput.trim() || !addressInput.trim() ||
+      !selectedShift?.value || !totalFee || !selectedBranch?.value
+    ) {
+      toast.error('Please ensure Name, Phone, Address, Branch, Shift, and Fee are filled correctly.');
       return;
     }
+    // **FIX END**
 
     try {
       await api.renewStudent(selectedStudent.id, {

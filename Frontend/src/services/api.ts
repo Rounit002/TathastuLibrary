@@ -101,9 +101,9 @@ interface DashboardStats {
 }
 
 const API_URL = window.cordova
-  ? 'https://tathastulibrary.onrender.com/api'
+  ? 'https://udaanlibrary.onrender.com/api'
   : process.env.NODE_ENV === 'production'
-    ? 'https://tathastulibrary.onrender.com/api'
+    ? 'https://udaanlibrary.onrender.com/api'
     : 'http://localhost:3000/api';
 
 const apiClient = axios.create({
@@ -125,22 +125,22 @@ const transformKeysToCamelCase = (obj: any): any => {
   return obj;
 };
 
+// FIX START: Corrected the logic to reliably convert all keys to snake_case.
 const transformKeysToSnakeCase = (obj: any): any => {
   if (Array.isArray(obj)) {
     return obj.map((item) => transformKeysToSnakeCase(item));
   } else if (obj && typeof obj === 'object' && obj !== null) {
     const newObj: any = {};
     for (const [key, value] of Object.entries(obj)) {
-      let newKey = key;
-      if (!/^[a-z_]+$/.test(key)) {
-        newKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
-      }
+      // Removed the faulty 'if' condition to ensure every key is processed.
+      const newKey = key.replace(/([A-Z])/g, '_$1').toLowerCase();
       newObj[newKey] = transformKeysToSnakeCase(value);
     }
     return newObj;
   }
   return obj;
 };
+// FIX END
 
 apiClient.interceptors.request.use((config) => {
   if (config.data && typeof config.data === 'object' && !(config.data instanceof FormData)) {
@@ -494,8 +494,8 @@ const api = {
   },
 
   updateStudent: async (
-    id: number,
-    studentData: {
+      id: number,
+      studentData: {
       name: string;
       email: string;
       phone: string;
@@ -509,8 +509,13 @@ const api = {
       totalFee: number;
       amountPaid: number;
       shiftIds: number[];
-      seatId?: number;
-    }
+      seatId: number | null;
+      cash: number;
+      online: number;
+      securityMoney: number;
+      remark: string;
+      profileImageUrl: string;
+      }
   ): Promise<{ student: Student }> => {
     const response = await apiClient.put(`/students/${id}`, studentData);
     return response.data;
@@ -524,14 +529,19 @@ const api = {
   renewStudent: async (
     id: number,
     membershipData: {
+      name: string;
+      registrationNumber?: string;
+      fatherName?: string;
+      aadharNumber?: string;
+      address: string;
+      email: string;
+      phone: string;
+      branchId: number;
       membershipStart: string;
       membershipEnd: string;
-      email?: string;
-      phone?: string;
-      branchId?: number;
+      shiftIds: number[];
       seatId?: number;
-      shiftIds?: number[];
-      totalFee?: number;
+      totalFee: number;
       cash?: number;
       online?: number;
       securityMoney?: number;

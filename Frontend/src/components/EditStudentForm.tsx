@@ -10,6 +10,9 @@ import { ArrowLeft } from 'lucide-react';
 interface Student {
   id: number;
   name: string;
+  registrationNumber?: string | null;
+  fatherName?: string | null;
+  aadharNumber?: string | null;
   email: string;
   phone: string;
   address: string;
@@ -63,6 +66,9 @@ interface Branch {
 
 interface FormData {
   name: string;
+  registrationNumber: string;
+  fatherName: string;
+  aadharNumber: string;
   email: string;
   phone: string;
   address: string;
@@ -76,10 +82,15 @@ interface FormData {
   online: string;
   securityMoney: string;
   remark: string;
+  image: File | null;
+  profileImageUrl: string;
 }
 
 interface UpdateStudentPayload {
   name: string;
+  registrationNumber: string;
+  fatherName: string;
+  aadharNumber: string;
   email: string;
   phone: string;
   address: string;
@@ -94,6 +105,7 @@ interface UpdateStudentPayload {
   online: number;
   securityMoney: number;
   remark: string;
+  profileImageUrl: string;
 }
 
 const EditStudentForm: React.FC = () => {
@@ -101,6 +113,9 @@ const EditStudentForm: React.FC = () => {
   const navigate = useNavigate();
   const [formData, setFormData] = useState<FormData>({
     name: '',
+    registrationNumber: '',
+    fatherName: '',
+    aadharNumber: '',
     email: '',
     phone: '',
     address: '',
@@ -114,6 +129,8 @@ const EditStudentForm: React.FC = () => {
     online: '',
     securityMoney: '',
     remark: '',
+    image: null,
+    profileImageUrl: '',
   });
   const [shifts, setShifts] = useState<Schedule[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
@@ -136,28 +153,35 @@ const EditStudentForm: React.FC = () => {
           api.getSchedules(),
           api.getBranches(),
         ]);
-        console.log('Fetched student data:', studentResponse);
-        const shiftId = studentResponse.assignments?.[0]?.shiftId?.toString() || '';
+        
+        const student: Student = studentResponse;
+        
+        const shiftId = student.assignments?.[0]?.shiftId?.toString() || '';
         const validShift = shiftsResponse.schedules.find(
           (shift: Schedule) => shift.id === parseInt(shiftId, 10)
         );
         setFormData({
-          name: studentResponse.name || '',
-          email: studentResponse.email || '',
-          phone: studentResponse.phone || '',
-          address: studentResponse.address || '',
-          branchId: studentResponse.branchId || null,
-          membershipStart: studentResponse.membershipStart || '',
-          membershipEnd: studentResponse.membershipEnd || '',
+          name: student.name || '',
+          registrationNumber: student.registrationNumber || '',
+          fatherName: student.fatherName || '',
+          aadharNumber: student.aadharNumber || '',
+          email: student.email || '',
+          phone: student.phone || '',
+          address: student.address || '',
+          branchId: student.branchId || null,
+          membershipStart: student.membershipStart ? student.membershipStart.split('T')[0] : '',
+          membershipEnd: student.membershipEnd ? student.membershipEnd.split('T')[0] : '',
           shiftId: validShift ? shiftId : '',
-          seatId: studentResponse.assignments?.[0]?.seatId || null,
-          totalFee: studentResponse.totalFee ? studentResponse.totalFee.toString() : '',
-          cash: studentResponse.cash ? studentResponse.cash.toString() : '',
-          online: studentResponse.online ? studentResponse.online.toString() : '',
-          securityMoney: studentResponse.securityMoney
-            ? studentResponse.securityMoney.toString()
+          seatId: student.assignments?.[0]?.seatId || null,
+          totalFee: student.totalFee ? student.totalFee.toString() : '',
+          cash: student.cash ? student.cash.toString() : '',
+          online: student.online ? student.online.toString() : '',
+          securityMoney: student.securityMoney
+            ? student.securityMoney.toString()
             : '0',
-          remark: studentResponse.remark || '',
+          remark: student.remark || '',
+          image: null,
+          profileImageUrl: student.profileImageUrl || '',
         });
         setShifts(shiftsResponse.schedules as Schedule[]);
         setBranches(branchesResponse);
@@ -183,7 +207,6 @@ const EditStudentForm: React.FC = () => {
         try {
           const seatsResponse = await api.getSeats({ shiftId });
           const allSeats: Seat[] = seatsResponse.seats;
-          // Filter seats for the selected shift that are not assigned or assigned to the current student
           const availableSeats = allSeats.filter((seat) => {
             const shift = seat.shifts.find((s) => s.shiftId === shiftId);
             return shift && (!shift.isAssigned || seat.id === formData.seatId);
@@ -213,6 +236,21 @@ const EditStudentForm: React.FC = () => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files ? e.target.files[0] : null;
+    if (file) {
+      if (!['image/jpeg', 'image/jpg', 'image/png', 'image/gif'].includes(file.type)) {
+        toast.error('Only JPEG, JPG, PNG, and GIF images are allowed');
+        return;
+      }
+      if (file.size > 200 * 1024) {
+        toast.error('Image size exceeds 200KB limit');
+        return;
+      }
+      setFormData(prev => ({ ...prev, image: file, profileImageUrl: URL.createObjectURL(file) }));
+    }
+  };
+
   const seatOptions = [
     { value: null, label: 'None' },
     ...seats.map((seat) => ({ value: seat.id, label: seat.seatNumber })),
@@ -224,35 +262,13 @@ const EditStudentForm: React.FC = () => {
   };
 
   const handleSubmit = async () => {
-    // Validate required fields
-    if (!formData.name.trim()) {
-      toast.error('Name is required');
+    if (!formData.name.trim() || !formData.phone.trim() || !formData.address.trim() || !formData.branchId || !formData.membershipStart || !formData.membershipEnd) {
+      toast.error('Name, Phone, Address, Branch, and Membership Dates are required');
       return;
     }
-    
-    // --- FIX: Email validation is now optional ---
-    // If an email is provided, it must have a valid format.
-    // An empty email field is now allowed.
+
     if (formData.email.trim() && !validateEmail(formData.email)) {
       toast.error('Please enter a valid email address or leave it empty');
-      return;
-    }
-    // --- END FIX ---
-
-    if (!formData.phone.trim()) {
-      toast.error('Phone number is required');
-      return;
-    }
-    if (!formData.address.trim()) {
-      toast.error('Address is required');
-      return;
-    }
-    if (!formData.branchId) {
-      toast.error('Branch is required');
-      return;
-    }
-    if (!formData.membershipStart || !formData.membershipEnd) {
-      toast.error('Membership dates are required');
       return;
     }
 
@@ -263,39 +279,36 @@ const EditStudentForm: React.FC = () => {
       return;
     }
 
-    const totalFeeValue = parseFloat(formData.totalFee);
+    const totalFeeValue = parseFloat(formData.totalFee) || 0;
     const cashValue = parseFloat(formData.cash) || 0;
     const onlineValue = parseFloat(formData.online) || 0;
     const securityMoneyValue = parseFloat(formData.securityMoney) || 0;
     const amountPaidValue = cashValue + onlineValue;
-
-    if (isNaN(totalFeeValue) || totalFeeValue < 0) {
-      toast.error('Total Fee must be a non-negative number');
-      return;
-    }
-    if (cashValue < 0) {
-      toast.error('Cash Payment must be a non-negative number');
-      return;
-    }
-    if (onlineValue < 0) {
-      toast.error('Online Payment must be a non-negative number');
-      return;
-    }
-    if (securityMoneyValue < 0) {
-      toast.error('Security Money must be a non-negative number');
-      return;
-    }
-
+    
     const shiftId = formData.shiftId ? parseInt(formData.shiftId, 10) : null;
-    if (!shiftId || !shifts.some((shift) => shift.id === shiftId)) {
-      toast.error('Please select a valid shift');
-      return;
-    }
 
     try {
       setSubmitting(true);
+      let imageUrl = formData.profileImageUrl;
+      if (formData.image) {
+        const imageFormData = new FormData();
+        imageFormData.append('image', formData.image);
+        try {
+          const uploadResponse = await api.uploadImage(imageFormData);
+          imageUrl = uploadResponse.imageUrl || '';
+        } catch (error: any) {
+          console.error('Image upload failed:', error);
+          toast.error(error.response?.data?.message || 'Failed to upload image');
+          setSubmitting(false);
+          return;
+        }
+      }
+
       const payload: UpdateStudentPayload = {
         name: formData.name,
+        registrationNumber: formData.registrationNumber,
+        fatherName: formData.fatherName,
+        aadharNumber: formData.aadharNumber,
         email: formData.email,
         phone: formData.phone,
         address: formData.address,
@@ -304,14 +317,15 @@ const EditStudentForm: React.FC = () => {
         membershipEnd: formData.membershipEnd,
         totalFee: totalFeeValue,
         amountPaid: amountPaidValue,
-        shiftIds: [shiftId],
+        shiftIds: shiftId ? [shiftId] : [],
         seatId: formData.seatId,
         cash: cashValue,
         online: onlineValue,
         securityMoney: securityMoneyValue,
         remark: formData.remark,
+        profileImageUrl: imageUrl,
       };
-      console.log('Submitting student data:', payload);
+      
       await api.updateStudent(studentId, payload);
       toast.success('Student updated successfully');
       navigate('/students');
@@ -341,15 +355,7 @@ const EditStudentForm: React.FC = () => {
   if (loading) {
     return <div className="p-6 animate-pulse text-center">Loading...</div>;
   }
-
-  if (shifts.length === 0) {
-    return <div className="p-6 text-red-500 text-center">No shifts available. Please add a shift first.</div>;
-  }
-
-  if (branches.length === 0) {
-    return <div className="p-6 text-red-500 text-center">No branches available. Please add a branch first.</div>;
-  }
-
+  
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6">
@@ -366,320 +372,124 @@ const EditStudentForm: React.FC = () => {
           <div /> {/* Placeholder for alignment */}
         </div>
         <div className="space-y-4">
+          
+          {formData.profileImageUrl && (
+            <div className="flex justify-center">
+              <img src={formData.profileImageUrl} alt="Student Profile" className="w-32 h-32 rounded-full object-cover"/>
+            </div>
+          )}
+          
           <div>
-            <label
-              htmlFor="name"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Name
-            </label>
-            <input
-              type="text"
-              id="name"
-              name="name"
-              value={formData.name}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+            <input type="text" id="name" name="name" value={formData.name} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Email (Optional)
-            </label>
-            <input
-              type="email"
-              id="email"
-              name="email"
-              value={formData.email}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="registrationNumber" className="block text-sm font-medium text-gray-700 mb-1">Registration Number</label>
+            <input type="text" id="registrationNumber" name="registrationNumber" value={formData.registrationNumber} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+          
           <div>
-            <label
-              htmlFor="phone"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Phone
-            </label>
-            <input
-              type="text"
-              id="phone"
-              name="phone"
-              value={formData.phone}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="fatherName" className="block text-sm font-medium text-gray-700 mb-1">Father's Name</label>
+            <input type="text" id="fatherName" name="fatherName" value={formData.fatherName} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="address"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Address
-            </label>
-            <input
-              type="text"
-              id="address"
-              name="address"
-              value={formData.address}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="aadharNumber" className="block text-sm font-medium text-gray-700 mb-1">Aadhar Number</label>
+            <input type="text" id="aadharNumber" name="aadharNumber" value={formData.aadharNumber} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+          
           <div>
-            <label
-              htmlFor="branchId"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Branch
-            </label>
-            <select
-              id="branchId"
-              name="branchId"
-              value={String(formData.branchId ?? '')}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  branchId: e.target.value ? parseInt(e.target.value, 10) : null,
-                }))
-              }
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            >
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">Email (Optional)</label>
+            <input type="email" id="email" name="email" value={formData.email} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+          </div>
+
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+            <input type="text" id="phone" name="phone" value={formData.phone} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+          </div>
+
+          <div>
+            <label htmlFor="address" className="block text-sm font-medium text-gray-700 mb-1">Address</label>
+            <input type="text" id="address" name="address" value={formData.address} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+          </div>
+          
+          <div>
+            <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
+            <select id="branchId" name="branchId" value={String(formData.branchId ?? '')} onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value ? parseInt(e.target.value, 10) : null, }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300">
               <option value="">-- Select Branch --</option>
-              {branches.map((branch) => (
-                <option key={branch.id} value={branch.id}>
-                  {branch.name}
-                </option>
-              ))}
+              {branches.map((branch) => (<option key={branch.id} value={branch.id}>{branch.name}</option>))}
             </select>
           </div>
+
           <div>
-            <label
-              htmlFor="membershipStart"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Membership Start
-            </label>
-            <input
-              type="date"
-              id="membershipStart"
-              name="membershipStart"
-              value={formData.membershipStart}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="membershipStart" className="block text-sm font-medium text-gray-700 mb-1">Membership Start</label>
+            <input type="date" id="membershipStart" name="membershipStart" value={formData.membershipStart} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="membershipEnd"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Membership End
-            </label>
-            <input
-              type="date"
-              id="membershipEnd"
-              name="membershipEnd"
-              value={formData.membershipEnd}
-              onChange={handleChange}
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="membershipEnd" className="block text-sm font-medium text-gray-700 mb-1">Membership End</label>
+            <input type="date" id="membershipEnd" name="membershipEnd" value={formData.membershipEnd} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="shiftId"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Select Shift
-            </label>
-            <select
-              id="shiftId"
-              name="shiftId"
-              value={formData.shiftId}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            >
+            <label htmlFor="shiftId" className="block text-sm font-medium text-gray-700 mb-1">Select Shift</label>
+            <select id="shiftId" name="shiftId" value={formData.shiftId} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300">
               <option value="">-- Select Shift --</option>
-              {shifts.map((shift) => (
-                <option key={shift.id} value={shift.id}>
-                  {shift.title} at {shift.time} ({shift.eventDate})
-                </option>
-              ))}
+              {shifts.map((shift) => (<option key={shift.id} value={shift.id}>{shift.title} at {shift.time} ({shift.eventDate})</option>))}
             </select>
           </div>
+
           <div>
-            <label
-              htmlFor="seatId"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Select Seat
-            </label>
-            {loadingSeats ? (
-              <div>Loading seats...</div>
-            ) : (
-              <Select
-                id="seatId"
-                name="seatId"
-                options={seatOptions}
-                value={seatOptions.find(
-                  (option) => option.value === formData.seatId
-                )}
-                onChange={(selected) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    seatId: selected ? selected.value : null,
-                  }))
-                }
-                isSearchable
-                placeholder="Select a seat or None"
-                className="w-full"
-              />
+            <label htmlFor="seatId" className="block text-sm font-medium text-gray-700 mb-1">Select Seat</label>
+            {loadingSeats ? (<div>Loading seats...</div>) : (
+              <Select id="seatId" name="seatId" options={seatOptions} value={seatOptions.find((option) => option.value === formData.seatId)} onChange={(selected) => setFormData((prev) => ({...prev, seatId: selected ? selected.value : null,}))} isSearchable placeholder="Select a seat or None" className="w-full"/>
             )}
           </div>
+          
           <div>
-            <label
-              htmlFor="totalFee"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Total Fee
-            </label>
-            <input
-              type="number"
-              id="totalFee"
-              name="totalFee"
-              value={formData.totalFee}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="totalFee" className="block text-sm font-medium text-gray-700 mb-1">Total Fee</label>
+            <input type="number" id="totalFee" name="totalFee" value={formData.totalFee} onChange={handleChange} step="0.01" min="0" required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="cash"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Cash Payment
-            </label>
-            <input
-              type="number"
-              id="cash"
-              name="cash"
-              value={formData.cash}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="cash" className="block text-sm font-medium text-gray-700 mb-1">Cash Payment</label>
+            <input type="number" id="cash" name="cash" value={formData.cash} onChange={handleChange} step="0.01" min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="online"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Online Payment
-            </label>
-            <input
-              type="number"
-              id="online"
-              name="online"
-              value={formData.online}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="online" className="block text-sm font-medium text-gray-700 mb-1">Online Payment</label>
+            <input type="number" id="online" name="online" value={formData.online} onChange={handleChange} step="0.01" min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+          
           <div>
-            <label
-              htmlFor="securityMoney"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Security Money
-            </label>
-            <input
-              type="number"
-              id="securityMoney"
-              name="securityMoney"
-              value={formData.securityMoney}
-              onChange={handleChange}
-              step="0.01"
-              min="0"
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-            />
+            <label htmlFor="securityMoney" className="block text-sm font-medium text-gray-700 mb-1">Security Money</label>
+            <input type="number" id="securityMoney" name="securityMoney" value={formData.securityMoney} onChange={handleChange} step="0.01" min="0" className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
+
           <div>
-            <label
-              htmlFor="amountPaid"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Total Amount Paid
-            </label>
-            <input
-              type="number"
-              id="amountPaid"
-              name="amountPaid"
-              value={totalAmountPaid.toFixed(2)}
-              readOnly
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
-            />
+            <label htmlFor="amountPaid" className="block text-sm font-medium text-gray-700 mb-1">Total Amount Paid</label>
+            <input type="number" id="amountPaid" name="amountPaid" value={totalAmountPaid.toFixed(2)} readOnly className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"/>
           </div>
+
           <div>
-            <label
-              htmlFor="dueAmount"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Due Amount
-            </label>
-            <input
-              type="number"
-              id="dueAmount"
-              name="dueAmount"
-              value={dueAmount.toFixed(2)}
-              readOnly
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
-            />
+            <label htmlFor="dueAmount" className="block text-sm font-medium text-gray-700 mb-1">Due Amount</label>
+            <input type="number" id="dueAmount" name="dueAmount" value={dueAmount.toFixed(2)} readOnly className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"/>
           </div>
+          
           <div>
-            <label
-              htmlFor="remark"
-              className="block text-sm font-medium text-gray-700 mb-1"
-            >
-              Remark
-            </label>
-            <textarea
-              id="remark"
-              name="remark"
-              value={formData.remark}
-              onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"
-              rows={3}
-            />
+            <label htmlFor="remark" className="block text-sm font-medium text-gray-700 mb-1">Remark</label>
+            <textarea id="remark" name="remark" value={formData.remark} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300" rows={3}/>
           </div>
+          
+          <div>
+             <label htmlFor="image" className="block text-sm font-medium text-gray-700 mb-1">Profile Image (max 200KB)</label>
+             <input type="file" id="image" name="image" accept="image/*" onChange={handleImageChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg"/>
+          </div>
+          
           <div className="flex space-x-4">
-            <Button
-              variant="outline"
-              onClick={handleCancel}
-              className="w-full"
-              disabled={submitting}
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition duration-200 disabled:bg-purple-400"
-            >
+            <Button variant="outline" onClick={handleCancel} className="w-full" disabled={submitting}>Cancel</Button>
+            <Button onClick={handleSubmit} disabled={submitting} className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition duration-200 disabled:bg-purple-400">
               {submitting ? 'Updating...' : 'Update Student'}
             </Button>
           </div>
