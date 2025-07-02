@@ -1,7 +1,6 @@
 const express = require('express');
 const bodyParser = require('body-parser');
 const session = require('express-session');
-const bcrypt = require('bcrypt');
 const { Pool } = require('pg');
 const path = require('path');
 const cors = require('cors');
@@ -131,7 +130,7 @@ if (typeof checkAdminOrStaff !== 'function') {
   process.exit(1);
 }
 
-const authRoutes = authRouterFactory(pool, bcrypt);
+const authRoutes = authRouterFactory(pool);
 
 app.post('/api/upload-image', authenticateUser, checkAdminOrStaff, upload.single('image'), async (req, res) => {
   try {
@@ -170,21 +169,21 @@ app.post('/api/upload-image', authenticateUser, checkAdminOrStaff, upload.single
   }
 });
 
-const initializeRoute = (filePath, poolInstance, bcryptInstance) => {
+const initializeRoute = (filePath, poolInstance) => {
   try {
     const routeFactory = require(filePath);
     if (typeof routeFactory !== 'function') {
       logger.error(`FATAL: Route factory in ${filePath} is not a function. Exiting.`);
       process.exit(1);
     }
-    return filePath.includes('users') ? routeFactory(poolInstance, bcryptInstance) : routeFactory(poolInstance);
+    return routeFactory(poolInstance);
   } catch (e) {
     logger.error(`FATAL: Failed to require or initialize route from ${filePath}: ${e.message} ${e.stack}`);
     process.exit(1);
   }
 };
 
-const userRoutes = initializeRoute('./routes/users', pool, bcrypt);
+const userRoutes = initializeRoute('./routes/users', pool);
 const studentRoutes = initializeRoute('./routes/students', pool);
 const scheduleRoutes = initializeRoute('./routes/schedules', pool);
 const seatsRoutes = initializeRoute('./routes/seats', pool);
@@ -200,8 +199,6 @@ const branchesRoutes = initializeRoute('./routes/branches', pool);
 const productsRoutes = initializeRoute('./routes/products', pool);
 
 app.use('/api/auth', authRoutes);
-// FIX: Removed 'checkAdmin' middleware to allow authenticated users to access their own profile.
-// The specific admin routes within 'userRoutes' are already protected internally.
 app.use('/api/users', authenticateUser, userRoutes);
 app.use('/api/students', authenticateUser, checkAdminOrStaff, studentRoutes);
 app.use('/api/schedules', authenticateUser, checkAdminOrStaff, scheduleRoutes);
@@ -266,17 +263,12 @@ const PORT_NUM = process.env.PORT || 3000;
     } else {
         logger.warn('setupCronJobs is not a function, cron jobs not started.');
     }
-    const server = app.listen(PORT_NUM, '0.0.0.0', () => { // Assign app.listen to 'server'
+    const server = app.listen(PORT_NUM, '0.0.0.0', () => {
       logger.info(`Server running on port ${PORT_NUM}`);
     });
 
-    // *** FIX STARTS HERE ***
-    // Set a longer keep-alive timeout to prevent premature connection closing
-    // Your frontend polls every 30s, so this should be > 30s. 65s is a safe value.
     server.keepAliveTimeout = 65000; // 65 seconds
     server.headersTimeout = 70000;   // 70 seconds
-    // *** FIX ENDS HERE ***
-
   } catch (err) {
     logger.error('Failed to start server:', err.stack);
     process.exit(1);
@@ -328,10 +320,10 @@ async function createDefaultAdmin() {
 
     const userCountResult = await pool.query("SELECT COUNT(*) FROM users WHERE role = 'admin'");
     if (parseInt(userCountResult.rows[0].count) === 0) {
-      const hashedPassword = await bcrypt.hash(process.env.DEFAULT_ADMIN_PASSWORD || 'admin', 10);
+      const plainPassword = process.env.DEFAULT_ADMIN_PASSWORD || 'admin';
       await pool.query(
         'INSERT INTO users (username, password, role, full_name, email) VALUES ($1, $2, $3, $4, $5)',
-        [process.env.DEFAULT_ADMIN_USERNAME || 'admin', hashedPassword, 'admin', 'Default Admin', 'admin@example.com']
+        [process.env.DEFAULT_ADMIN_USERNAME || 'admin', plainPassword, 'admin', 'Default Admin', 'admin@example.com']
       );
       logger.info('Default admin user created.');
     } else {
@@ -341,7 +333,7 @@ async function createDefaultAdmin() {
     logger.error('Error creating default admin user:', err.stack);
      if (err.code === '42P01') {
         logger.warn('Users table does not exist yet (checked again). Default admin cannot be created.');
-    } else if (err.code !== '23505') { // 23505 is unique_violation
+    } else if (err.code !== '23505') {
         // logger.error('Unhandled error during default admin creation:', err);
     } else {
         logger.warn(`Admin user might already exist or other unique constraint violation during default admin creation: ${err.message}`);

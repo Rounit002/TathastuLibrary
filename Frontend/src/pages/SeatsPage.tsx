@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { toast } from 'sonner';
-import { ArrowLeft, Trash2, PlusCircle, Loader2 } from 'lucide-react';
+import { ArrowLeft, Trash2, PlusCircle, Loader2, Search } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import Navbar from '../components/Navbar';
 import { useAuth } from '../context/AuthContext';
@@ -29,6 +29,7 @@ interface Schedule {
 
 const SeatsPage = () => {
   const [seats, setSeats] = useState<Seat[]>([]);
+  const [filteredSeats, setFilteredSeats] = useState<Seat[]>([]);
   const [schedules, setSchedules] = useState<Schedule[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +38,8 @@ const SeatsPage = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [branches, setBranches] = useState<{ id: number; name: string }[]>([]);
   const [selectedBranchId, setSelectedBranchId] = useState<number | null>(null);
+  const [selectedShiftId, setSelectedShiftId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
 
@@ -61,7 +64,16 @@ const SeatsPage = () => {
       setLoading(true);
       const response = await api.getSeats(selectedBranchId ? { branchId: selectedBranchId } : undefined);
       if (response.seats && Array.isArray(response.seats)) {
-        setSeats(response.seats.sort((a, b) => parseInt(a.seatNumber) - parseInt(b.seatNumber)));
+        const sortedSeats = response.seats.sort((a, b) => {
+          const [prefixA, numA] = a.seatNumber.split('-');
+          const [prefixB, numB] = b.seatNumber.split('-');
+          if (prefixA === prefixB) {
+            return parseInt(numA) - parseInt(numB);
+          }
+          return prefixA.localeCompare(prefixB);
+        });
+        setSeats(sortedSeats);
+        setFilteredSeats(sortedSeats);
         setError(null);
       } else {
         throw new Error('Invalid data format from API');
@@ -83,7 +95,6 @@ const SeatsPage = () => {
     try {
       const response = await api.getSchedules();
       if (response.schedules && Array.isArray(response.schedules)) {
-        // Sort schedules by eventDate and time
         const sortedSchedules = response.schedules.sort((a: Schedule, b: Schedule) => {
           const dateComparison = a.eventDate.localeCompare(b.eventDate);
           if (dateComparison !== 0) return dateComparison;
@@ -101,7 +112,7 @@ const SeatsPage = () => {
   const handleAddSeats = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     if (!selectedBranchId) {
-      toast.error('Please select a branch before adding seats');
+      toast.error('Please select Branch before adding seats');
       return;
     }
     setIsAdding(true);
@@ -129,6 +140,13 @@ const SeatsPage = () => {
     }
   };
 
+  const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const term = e.target.value.toLowerCase();
+    setSearchTerm(term);
+    const filtered = seats.filter(seat => seat.seatNumber.toLowerCase().includes(term));
+    setFilteredSeats(filtered);
+  };
+
   useEffect(() => {
     if (isAuthenticated) {
       fetchBranches();
@@ -136,6 +154,8 @@ const SeatsPage = () => {
       fetchSchedules();
     }
   }, [selectedBranchId, isAuthenticated]);
+
+  const isAllShiftSelected = selectedShiftId && schedules.find(s => s.id === selectedShiftId)?.title.startsWith('All');
 
   if (authLoading) {
     return (
@@ -186,6 +206,23 @@ const SeatsPage = () => {
               </select>
             </div>
 
+            <div className="mb-6">
+              <label htmlFor="search-seats" className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                Search Seats:
+              </label>
+              <div className="relative">
+                <input
+                  id="search-seats"
+                  type="text"
+                  value={searchTerm}
+                  onChange={handleSearch}
+                  placeholder="Search by seat number (e.g., C-1)"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
+                />
+                <Search size={16} className="absolute right-3 top-2 text-gray-400" />
+              </div>
+            </div>
+
             {loading ? (
               <div className="flex justify-center items-center py-8">
                 <Loader2 size={24} className="animate-spin text-gray-500 dark:text-gray-400" />
@@ -194,14 +231,13 @@ const SeatsPage = () => {
               <div className="text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/30 p-4 rounded-lg mb-6">
                 {error}
               </div>
-            ) : seats.length === 0 ? (
+            ) : filteredSeats.length === 0 ? (
               <div className="text-center text-gray-500 dark:text-gray-400 py-8">
                 No seats available. Add seats below to get started.
               </div>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-                {seats.map((seat) => {
-                  // Map each schedule to its assignment status for this seat
+                {filteredSeats.map((seat) => {
                   const shiftStatuses = schedules.map((schedule) => {
                     const seatShift = seat.shifts.find((s) => s.shiftId === schedule.id);
                     return {
@@ -214,7 +250,7 @@ const SeatsPage = () => {
                   return (
                     <div
                       key={seat.id}
-                      className="p-3 border rounded-lg shadow-sm bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
+                      className="p-3 border rounded-lg shadow-sm bg strand-white dark:bg-gray-800 border-gray-200 dark:border-gray-700"
                     >
                       <div className="flex items-center justify-between mb-2">
                         <h3 className="text-base font-semibold text-gray-800 dark:text-gray-200">
@@ -241,7 +277,7 @@ const SeatsPage = () => {
                                 isAssigned
                                   ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-500'
                                   : 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-300'
-                              }`}
+                              } ${isAllShiftSelected && schedule.id !== selectedShiftId ? 'opacity-50' : ''}`}
                             >
                               <span className="flex-1 truncate">
                                 {schedule.title} ({schedule.description})
@@ -272,7 +308,7 @@ const SeatsPage = () => {
                     type="text"
                     value={newSeatNumbers}
                     onChange={(e) => setNewSeatNumbers(e.target.value)}
-                    placeholder="Enter seat numbers (e.g., 1,2,3)"
+                    placeholder="Enter seat numbers (e.g., C-1,C-2,C-3)"
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-md p-2 text-sm bg-gray-50 dark:bg-gray-700 text-gray-800 dark:text-gray-200 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all"
                     required
                     disabled={isAdding || !selectedBranchId}

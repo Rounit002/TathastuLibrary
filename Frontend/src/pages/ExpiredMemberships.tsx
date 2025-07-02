@@ -1,10 +1,9 @@
-// File: ExpiredMemberships.tsx
 import React, { useEffect, useState } from 'react';
 import Navbar from '../components/Navbar';
 import Sidebar from '../components/Sidebar';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import api from '../services/api';
-import { Search, ChevronLeft, ChevronRight, Trash2, Eye } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Trash2, Eye, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -56,7 +55,6 @@ interface Student {
   seatId?: number;
   seatNumber?: string;
 }
-
 
 interface Seat {
   id: number;
@@ -238,6 +236,13 @@ const ExpiredMemberships = () => {
     }
   };
 
+  const handleWhatsAppClick = (phone: string) => {
+    // Ensure phone number is formatted correctly for WhatsApp (remove spaces, dashes, etc.)
+    const cleanedPhone = phone.replace(/\D/g, '');
+    // Open WhatsApp chat with +91 country code for Indian numbers
+    window.open(`https://wa.me/+91${cleanedPhone}`, '_blank');
+  };
+
   const cashAmount = parseFloat(cash) || 0;
   const onlineAmount = parseFloat(online) || 0;
   const paid = cashAmount + onlineAmount;
@@ -254,7 +259,7 @@ const ExpiredMemberships = () => {
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
         <div className="p-4">
-          <h2 className="text-xl font-semibold mb-4">Expired Memberships</h2>
+          <h2 className="text-xl font-semibold mb- Lor4">Expired Memberships</h2>
           <div className="relative mb-4">
             <Search className="absolute left-3 top-3 text-gray-400" />
             <input
@@ -321,6 +326,13 @@ const ExpiredMemberships = () => {
                             <Trash2 size={16} />
                           </Button>
                         )}
+                        <Button
+                          variant="outline"
+                          onClick={() => handleWhatsAppClick(student.phone)}
+                          title="Contact via WhatsApp"
+                        >
+                          <MessageCircle size={16} />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}

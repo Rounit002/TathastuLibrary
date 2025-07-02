@@ -1,19 +1,15 @@
-// ./routes/auth.js
-
-const checkPermission = (permission) => {
-  return (req, res, next) => {
-    if (!req.session.user) {
-      return res.status(401).json({ message: 'Unauthorized - Please log in' });
-    }
-    if (req.session.user.role === 'admin') {
-      return next();
-    }
-    const userPermissions = req.session.user.permissions || [];
-    if (!userPermissions.includes(permission)) {
-      return res.status(403).json({ message: 'Forbidden - Insufficient permissions' });
-    }
+const checkPermission = (req, res, next) => {
+  if (!req.session.user) {
+    return res.status(401).json({ message: 'Unauthorized - Please log in' });
+  }
+  if (req.session.user.role === 'admin') {
     return next();
-  };
+  }
+  const userPermissions = req.session.user.permissions || [];
+  if (!userPermissions.includes(permission)) {
+    return res.status(403).json({ message: 'Forbidden - Insufficient permissions' });
+  }
+  return next();
 };
 
 const checkAdmin = (req, res, next) => {
@@ -49,7 +45,7 @@ const authenticateUser = (req, res, next) => {
   }
 };
 
-const authRouter = (pool, bcrypt) => {
+const authRouter = (pool) => {
   const router = require('express').Router();
 
   router.post('/login', async (req, res) => {
@@ -69,7 +65,7 @@ const authRouter = (pool, bcrypt) => {
       }
 
       const user = result.rows[0];
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      const isPasswordValid = password === user.password;
 
       if (!isPasswordValid) {
         return res.status(401).json({ message: 'Invalid credentials' });
