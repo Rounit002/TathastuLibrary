@@ -77,7 +77,7 @@ const ExpiredMemberships = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [renewDialogOpen, setRenewDialogOpen] = useState(false);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
-  
+
   // State for all form fields
   const [nameInput, setNameInput] = useState('');
   const [registrationNumberInput, setRegistrationNumberInput] = useState('');
@@ -99,7 +99,7 @@ const ExpiredMemberships = () => {
   const [online, setOnline] = useState<string>('');
   const [securityMoney, setSecurityMoney] = useState<string>('');
   const [remark, setRemark] = useState<string>('');
-  
+
   const navigate = useNavigate();
   const { user } = useAuth();
 
@@ -167,10 +167,10 @@ const ExpiredMemberships = () => {
         setPhoneInput(fullStudentDetails.phone || '');
         setAddressInput(fullStudentDetails.address || '');
         setSelectedBranch(fullStudentDetails.branchId ? { value: fullStudentDetails.branchId, label: fullStudentDetails.branchName } : null);
-        
+
         const currentAssignment = fullStudentDetails.assignments?.[0];
         setSelectedShift(currentAssignment ? { value: currentAssignment.shiftId, label: currentAssignment.shiftTitle } : null);
-        
+
         // This slight delay allows the seat options to populate based on the selected shift
         setTimeout(() => {
              setSelectedSeat(currentAssignment ? { value: currentAssignment.seatId, label: currentAssignment.seatNumber } : null);
@@ -181,7 +181,7 @@ const ExpiredMemberships = () => {
         setOnline(fullStudentDetails.online ? fullStudentDetails.online.toString() : '0');
         setSecurityMoney(fullStudentDetails.securityMoney ? fullStudentDetails.securityMoney.toString() : '0');
         setRemark(fullStudentDetails.remark || '');
-        
+
         setRenewDialogOpen(true);
     } catch (error) {
         console.error("Failed to fetch student details for renewal:", error);
@@ -258,8 +258,9 @@ const ExpiredMemberships = () => {
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <Navbar />
-        <div className="p-4">
-          <h2 className="text-xl font-semibold mb- Lor4">Expired Memberships</h2>
+        {/* MODIFICATION: Added 'overflow-y-auto' to make this container scrollable */}
+        <div className="p-4 overflow-y-auto">
+          <h2 className="text-xl font-semibold mb-4">Expired Memberships</h2>
           <div className="relative mb-4">
             <Search className="absolute left-3 top-3 text-gray-400" />
             <input
