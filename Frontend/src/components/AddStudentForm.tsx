@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../services/api';
-import Select from 'react-select';
+import Select, { OnChangeValue } from 'react-select';
 
 // Define types based on updated api.ts interfaces
 interface Branch {
@@ -47,7 +47,7 @@ interface FormData {
   membershipStart: string;
   membershipEnd: string;
   seatId: number | null;
-  shiftId: number | null;
+  shiftIds: number[];
   totalFee: string;
   cash: string;
   online: string;
@@ -71,7 +71,7 @@ const AddStudentForm: React.FC = () => {
     membershipStart: '',
     membershipEnd: '',
     seatId: null,
-    shiftId: null,
+    shiftIds: [],
     totalFee: '',
     cash: '',
     online: '',
@@ -150,10 +150,13 @@ const AddStudentForm: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSelectChange = (name: keyof FormData, option: SelectOption | ShiftOption | null) => {
-    if (name === 'shiftId') {
-      const opt = option as ShiftOption | null;
-      setFormData(prev => ({ ...prev, [name]: opt ? opt.value : null }));
+  const handleSelectChange = (
+    name: keyof FormData,
+    option: OnChangeValue<SelectOption | ShiftOption, boolean>
+  ) => {
+    if (name === 'shiftIds') {
+      const opts = option as OnChangeValue<ShiftOption, true>;
+      setFormData(prev => ({ ...prev, shiftIds: opts ? opts.map(o => o.value) : [] }));
     } else {
       const opt = option as SelectOption | null;
       setFormData(prev => ({ ...prev, [name]: opt ? opt.value : null }));
@@ -213,7 +216,6 @@ const AddStudentForm: React.FC = () => {
       return;
     }
 
-    // Allow submission with seatId as null and a shift selected
     try {
       let imageUrl = '';
       if (formData.image) {
@@ -241,7 +243,7 @@ const AddStudentForm: React.FC = () => {
         membershipStart: formData.membershipStart,
         membershipEnd: formData.membershipEnd,
         seatId: formData.seatId !== null ? formData.seatId : null,
-        shiftIds: formData.shiftId !== null ? [formData.shiftId] : [],
+        shiftIds: formData.shiftIds,
         totalFee: formData.totalFee ? parseFloat(formData.totalFee) : 0,
         amountPaid: (parseFloat(formData.cash) || 0) + (parseFloat(formData.online) || 0),
         cash: parseFloat(formData.cash) || 0,
@@ -365,9 +367,11 @@ const AddStudentForm: React.FC = () => {
             Branch
           </label>
           <Select
+            id="branchId"
+            name="branchId"
             options={branchOptions}
             value={branchOptions.find(option => option.value === formData.branchId) || null}
-            onChange={(option: SelectOption | null) => handleSelectChange('branchId', option)}
+            onChange={(option) => handleSelectChange('branchId', option)}
             placeholder="Select a branch"
             className="w-full"
           />
@@ -403,25 +407,31 @@ const AddStudentForm: React.FC = () => {
             Select Seat
           </label>
           <Select
+            id="seatId"
+            name="seatId"
             options={seatOptions}
             value={seatOptions.find(option => option.value === formData.seatId) || null}
-            onChange={(option: SelectOption | null) => handleSelectChange('seatId', option)}
+            onChange={(option) => handleSelectChange('seatId', option)}
             isLoading={loadingSeats}
-            placeholder="Select a seat"
+            placeholder="Select a seat or None"
             className="w-full"
           />
         </div>
         <div>
-          <label htmlFor="shiftId" className="block text-sm font-medium text-gray-700 mb-1">
-            Select Shift
+          <label htmlFor="shiftIds" className="block text-sm font-medium text-gray-700 mb-1">
+            Select Shift(s)
           </label>
           <Select
+            isMulti
+            id="shiftIds"
+            name="shiftIds"
             options={shiftOptions}
-            value={shiftOptions.find(option => option.value === formData.shiftId) || null}
-            onChange={(option: ShiftOption | null) => handleSelectChange('shiftId', option)}
+            value={shiftOptions.filter(option => formData.shiftIds.includes(option.value))}
+            onChange={(options) => handleSelectChange('shiftIds', options)}
             isLoading={loadingShifts}
-            placeholder="Select a shift"
+            placeholder="Select one or more shifts"
             className="w-full"
+            isOptionDisabled={(option) => option.isDisabled}
           />
         </div>
         <div>

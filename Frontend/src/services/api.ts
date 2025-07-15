@@ -684,41 +684,16 @@ const api = {
     }
   },
 
-  getAvailableShifts: async (seatId: number): Promise<{ availableShifts: Array<{ id: number; title: string; time: string; eventDate: string }> }> => {
+   getAvailableShifts: async (seatId: number): Promise<{ availableShifts: Schedule[] }> => {
     try {
-      const response = await apiClient.get('/seats');
-      const seats = response.data.seats as Seat[];
-      const seat = seats.find(s => s.id === seatId);
-      if (!seat) {
-        throw new Error('Seat not found');
-      }
-      const availableShifts = seat.shifts
-        .filter(shift => !shift.isAssigned)
-        .map(shift => ({
-          id: shift.shiftId,
-          title: shift.shiftTitle,
-          time: '',
-          eventDate: '',
-        }));
-
-      const schedulesResponse = await api.getSchedules();
-      const schedules = schedulesResponse.schedules;
-      const enrichedShifts = availableShifts.map(shift => {
-        const schedule = schedules.find(s => s.id === shift.id);
-        return {
-          ...shift,
-          time: schedule?.time || 'Unknown',
-          eventDate: schedule?.eventDate || 'Unknown',
-        };
-      });
-
-      return { availableShifts: enrichedShifts };
+      const response = await apiClient.get(`/seats/${seatId}/available-shifts`);
+      return response.data;
     } catch (error: any) {
-      console.error('Error fetching available shifts:', error.message);
+      console.error(`Error fetching available shifts for seatId ${seatId}:`, error.message);
       throw error;
     }
   },
-
+  
   getSettings: async () => {
     try {
       const response = await apiClient.get('/settings');

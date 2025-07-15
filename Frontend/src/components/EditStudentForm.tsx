@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../services/api';
-import Select from 'react-select';
+import Select, { OnChangeValue } from 'react-select';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
@@ -41,7 +41,7 @@ interface Student {
 interface Schedule {
   id: number;
   title: string;
-  description: string | null;
+  description?: string | null; // FIX: Made description optional to match API response type
   time: string;
   eventDate: string;
 }
@@ -50,12 +50,6 @@ interface Seat {
   id: number;
   seatNumber: string;
   branchId?: number;
-  shifts: Array<{
-    shiftId: number;
-    shiftTitle: string;
-    isAssigned: boolean;
-    studentName: string | null;
-  }>;
 }
 
 interface Branch {
@@ -75,7 +69,7 @@ interface FormData {
   branchId: number | null;
   membershipStart: string;
   membershipEnd: string;
-  shiftId: string;
+  shiftIds: number[];
   seatId: number | null;
   totalFee: string;
   cash: string;
@@ -86,26 +80,15 @@ interface FormData {
   profileImageUrl: string;
 }
 
-interface UpdateStudentPayload {
-  name: string;
-  registrationNumber: string;
-  fatherName: string;
-  aadharNumber: string;
-  email: string;
-  phone: string;
-  address: string;
-  branchId: number;
-  membershipStart: string;
-  membershipEnd: string;
-  totalFee: number;
-  amountPaid: number;
-  shiftIds: number[];
-  seatId: number | null;
-  cash: number;
-  online: number;
-  securityMoney: number;
-  remark: string;
-  profileImageUrl: string;
+interface ShiftOption {
+    value: number;
+    label: string;
+    isDisabled?: boolean;
+}
+
+interface SelectOption {
+    value: number | null;
+    label: string;
 }
 
 const EditStudentForm: React.FC = () => {
@@ -122,7 +105,7 @@ const EditStudentForm: React.FC = () => {
     branchId: null,
     membershipStart: '',
     membershipEnd: '',
-    shiftId: '',
+    shiftIds: [],
     seatId: null,
     totalFee: '',
     cash: '',
@@ -132,21 +115,27 @@ const EditStudentForm: React.FC = () => {
     image: null,
     profileImageUrl: '',
   });
-  const [shifts, setShifts] = useState<Schedule[]>([]);
+
+  const [allShifts, setAllShifts] = useState<Schedule[]>([]);
+  const [availableShifts, setAvailableShifts] = useState<Schedule[]>([]);
   const [seats, setSeats] = useState<Seat[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
-  const [loadingSeats, setLoadingSeats] = useState(false);
+  const [originalStudentData, setOriginalStudentData] = useState<Student | null>(null);
+
   const [loading, setLoading] = useState(true);
+  const [loadingSeats, setLoadingSeats] = useState(false);
+  const [loadingShifts, setLoadingShifts] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Parse id to number
   const studentId = id ? parseInt(id, 10) : NaN;
-  if (isNaN(studentId)) {
-    return <div className="p-6 text-red-500 text-center">Invalid student ID.</div>;
-  }
 
   useEffect(() => {
-    const fetchStudentShiftsAndBranches = async () => {
+    const fetchInitialData = async () => {
+      if (isNaN(studentId)) {
+        toast.error('Invalid student ID.');
+        setLoading(false);
+        return;
+      }
       try {
         const [studentResponse, shiftsResponse, branchesResponse] = await Promise.all([
           api.getStudent(studentId),
@@ -155,11 +144,10 @@ const EditStudentForm: React.FC = () => {
         ]);
         
         const student: Student = studentResponse;
-        
-        const shiftId = student.assignments?.[0]?.shiftId?.toString() || '';
-        const validShift = shiftsResponse.schedules.find(
-          (shift: Schedule) => shift.id === parseInt(shiftId, 10)
-        );
+        setOriginalStudentData(student);
+        setAllShifts(shiftsResponse.schedules);
+        setBranches(branchesResponse);
+
         setFormData({
           name: student.name || '',
           registrationNumber: student.registrationNumber || '',
@@ -171,52 +159,36 @@ const EditStudentForm: React.FC = () => {
           branchId: student.branchId || null,
           membershipStart: student.membershipStart ? student.membershipStart.split('T')[0] : '',
           membershipEnd: student.membershipEnd ? student.membershipEnd.split('T')[0] : '',
-          shiftId: validShift ? shiftId : '',
+          shiftIds: student.assignments?.map(a => a.shiftId) ?? [],
           seatId: student.assignments?.[0]?.seatId || null,
-          totalFee: student.totalFee ? student.totalFee.toString() : '',
-          cash: student.cash ? student.cash.toString() : '',
-          online: student.online ? student.online.toString() : '',
-          securityMoney: student.securityMoney
-            ? student.securityMoney.toString()
-            : '0',
+          totalFee: student.totalFee ? student.totalFee.toString() : '0',
+          cash: student.cash ? student.cash.toString() : '0',
+          online: student.online ? student.online.toString() : '0',
+          securityMoney: student.securityMoney ? student.securityMoney.toString() : '0',
           remark: student.remark || '',
           image: null,
           profileImageUrl: student.profileImageUrl || '',
         });
-        setShifts(shiftsResponse.schedules as Schedule[]);
-        setBranches(branchesResponse);
       } catch (error: any) {
-        console.error('Failed to fetch data:', error);
-        const errorMessage =
-          error.response?.status === 404
-            ? 'Student not found'
-            : error.response?.data?.message || error.message || 'Failed to load student, shifts, or branches';
-        toast.error(errorMessage);
+        console.error('Failed to fetch initial data:', error);
+        toast.error(error.message || 'Failed to load initial data.');
       } finally {
         setLoading(false);
       }
     };
-    fetchStudentShiftsAndBranches();
+    fetchInitialData();
   }, [studentId]);
 
   useEffect(() => {
     const fetchSeats = async () => {
-      const shiftId = parseInt(formData.shiftId, 10);
-      if (shiftId && !isNaN(shiftId)) {
+      if (formData.branchId) {
         setLoadingSeats(true);
         try {
-          const seatsResponse = await api.getSeats({ shiftId });
-          const allSeats: Seat[] = seatsResponse.seats;
-          const availableSeats = allSeats.filter((seat) => {
-            const shift = seat.shifts.find((s) => s.shiftId === shiftId);
-            return shift && (!shift.isAssigned || seat.id === formData.seatId);
-          });
-          setSeats(availableSeats);
+          const seatsResponse = await api.getSeats({ branchId: formData.branchId });
+          setSeats(seatsResponse.seats);
         } catch (error: any) {
           console.error('Failed to fetch seats:', error);
-          const errorMessage =
-            error.response?.data?.message || error.message || 'Failed to load seats';
-          toast.error(errorMessage);
+          toast.error(error.message || 'Failed to load seats');
         } finally {
           setLoadingSeats(false);
         }
@@ -225,19 +197,46 @@ const EditStudentForm: React.FC = () => {
       }
     };
     fetchSeats();
-  }, [formData.shiftId, formData.seatId]);
+  }, [formData.branchId]);
 
-  const handleChange = (
-    e: React.ChangeEvent<
-      HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-    >
-  ) => {
+  useEffect(() => {
+    const fetchAvailableShifts = async () => {
+      if (formData.seatId) {
+        setLoadingShifts(true);
+        try {
+          const response = await api.getAvailableShifts(formData.seatId);
+          setAvailableShifts(response.availableShifts);
+        } catch (error: any) {
+          console.error('Failed to fetch available shifts:', error);
+          toast.error(error.message || 'Failed to load available shifts');
+        } finally {
+          setLoadingShifts(false);
+        }
+      } else {
+        setAvailableShifts(allShifts);
+      }
+    };
+    fetchAvailableShifts();
+  }, [formData.seatId, allShifts]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSelectChange = (name: 'seatId' | 'branchId', option: OnChangeValue<SelectOption, false>) => {
+    setFormData(prev => ({...prev, [name]: option ? option.value : null}));
+    if (name === 'seatId') {
+      setFormData(prev => ({...prev, shiftIds: []})); // Reset shifts when seat changes
+    }
+  };
+  
+  const handleShiftSelectChange = (options: OnChangeValue<ShiftOption, true>) => {
+    setFormData(prev => ({...prev, shiftIds: options ? options.map(o => o.value) : []}));
   };
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files ? e.target.files[0] : null;
+    const file = e.target.files?.[0];
     if (file) {
       if (!['image/jpeg', 'image/jpg', 'image/png', 'image/gif'].includes(file.type)) {
         toast.error('Only JPEG, JPG, PNG, and GIF images are allowed');
@@ -251,60 +250,37 @@ const EditStudentForm: React.FC = () => {
     }
   };
 
-  const seatOptions = [
-    { value: null, label: 'None' },
-    ...seats.map((seat) => ({ value: seat.id, label: seat.seatNumber })),
-  ];
-
-  const validateEmail = (email: string) => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
   const handleSubmit = async () => {
     if (!formData.name.trim() || !formData.phone.trim() || !formData.address.trim() || !formData.branchId || !formData.membershipStart || !formData.membershipEnd) {
       toast.error('Name, Phone, Address, Branch, and Membership Dates are required');
       return;
     }
-
     if (formData.email.trim() && !validateEmail(formData.email)) {
       toast.error('Please enter a valid email address or leave it empty');
       return;
     }
-
-    const startDate = new Date(formData.membershipStart);
-    const endDate = new Date(formData.membershipEnd);
-    if (startDate >= endDate) {
+    if (new Date(formData.membershipStart) >= new Date(formData.membershipEnd)) {
       toast.error('Membership End date must be after Membership Start date');
       return;
     }
 
-    const totalFeeValue = parseFloat(formData.totalFee) || 0;
-    const cashValue = parseFloat(formData.cash) || 0;
-    const onlineValue = parseFloat(formData.online) || 0;
-    const securityMoneyValue = parseFloat(formData.securityMoney) || 0;
-    const amountPaidValue = cashValue + onlineValue;
-    
-    const shiftId = formData.shiftId ? parseInt(formData.shiftId, 10) : null;
-
+    setSubmitting(true);
     try {
-      setSubmitting(true);
       let imageUrl = formData.profileImageUrl;
       if (formData.image) {
         const imageFormData = new FormData();
         imageFormData.append('image', formData.image);
-        try {
-          const uploadResponse = await api.uploadImage(imageFormData);
-          imageUrl = uploadResponse.imageUrl || '';
-        } catch (error: any) {
-          console.error('Image upload failed:', error);
-          toast.error(error.response?.data?.message || 'Failed to upload image');
-          setSubmitting(false);
-          return;
-        }
+        const uploadResponse = await api.uploadImage(imageFormData);
+        imageUrl = uploadResponse.imageUrl || '';
       }
 
-      const payload: UpdateStudentPayload = {
+      const totalFeeValue = parseFloat(formData.totalFee) || 0;
+      const cashValue = parseFloat(formData.cash) || 0;
+      const onlineValue = parseFloat(formData.online) || 0;
+
+      const payload = {
         name: formData.name,
         registrationNumber: formData.registrationNumber,
         fatherName: formData.fatherName,
@@ -316,12 +292,12 @@ const EditStudentForm: React.FC = () => {
         membershipStart: formData.membershipStart,
         membershipEnd: formData.membershipEnd,
         totalFee: totalFeeValue,
-        amountPaid: amountPaidValue,
-        shiftIds: shiftId ? [shiftId] : [],
+        amountPaid: cashValue + onlineValue,
+        shiftIds: formData.shiftIds,
         seatId: formData.seatId,
         cash: cashValue,
         online: onlineValue,
-        securityMoney: securityMoneyValue,
+        securityMoney: parseFloat(formData.securityMoney) || 0,
         remark: formData.remark,
         profileImageUrl: imageUrl,
       };
@@ -331,21 +307,33 @@ const EditStudentForm: React.FC = () => {
       navigate('/students');
     } catch (error: any) {
       console.error('Failed to update student:', error);
-      const errorMessage =
-        error.response?.status === 404
-          ? 'Student not found'
-          : error.response?.data?.message || error.message || 'Failed to update student';
-      toast.error(errorMessage);
+      toast.error(error.response?.data?.message || 'Failed to update student');
     } finally {
       setSubmitting(false);
     }
   };
+  
+  const seatOptions: SelectOption[] = [
+    { value: null, label: 'None' },
+    ...seats.map((seat) => ({ value: seat.id, label: seat.seatNumber })),
+  ];
+  
+  const shiftOptions: ShiftOption[] = allShifts.map(shift => {
+    const isAvailable = availableShifts.some(s => s.id === shift.id);
+    const isOriginallyAssigned = originalStudentData?.assignments?.some(a => a.shiftId === shift.id) ?? false;
+    const isSeatSelected = formData.seatId !== null;
 
-  const handleCancel = () => {
-    if (window.confirm('Are you sure you want to cancel? Any unsaved changes will be lost.')) {
-      navigate(-1);
+    let label = `${shift.title} at ${shift.time} (${shift.eventDate})`;
+    if (isSeatSelected) {
+        label += (isAvailable || isOriginallyAssigned) ? ' (Available)' : ' (Assigned)';
     }
-  };
+
+    return {
+      value: shift.id,
+      label,
+      isDisabled: isSeatSelected && !isAvailable && !isOriginallyAssigned,
+    };
+  });
 
   const cashAmount = parseFloat(formData.cash) || 0;
   const onlineAmount = parseFloat(formData.online) || 0;
@@ -356,20 +344,19 @@ const EditStudentForm: React.FC = () => {
     return <div className="p-6 animate-pulse text-center">Loading...</div>;
   }
   
+  if (isNaN(studentId)) {
+    return <div className="p-6 text-red-500 text-center">Invalid student ID.</div>;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
       <div className="max-w-2xl w-full bg-white shadow-lg rounded-lg p-6">
         <div className="flex items-center justify-between mb-6">
-          <Button
-            variant="outline"
-            onClick={() => navigate(-1)}
-            className="flex items-center gap-2"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back
+          <Button variant="outline" onClick={() => navigate(-1)} className="flex items-center gap-2">
+            <ArrowLeft className="w-5 h-5" /> Back
           </Button>
           <h1 className="text-2xl font-bold text-gray-900">Edit Student</h1>
-          <div /> {/* Placeholder for alignment */}
+          <div />
         </div>
         <div className="space-y-4">
           
@@ -416,10 +403,15 @@ const EditStudentForm: React.FC = () => {
           
           <div>
             <label htmlFor="branchId" className="block text-sm font-medium text-gray-700 mb-1">Branch</label>
-            <select id="branchId" name="branchId" value={String(formData.branchId ?? '')} onChange={(e) => setFormData((prev) => ({ ...prev, branchId: e.target.value ? parseInt(e.target.value, 10) : null, }))} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300">
-              <option value="">-- Select Branch --</option>
-              {branches.map((branch) => (<option key={branch.id} value={branch.id}>{branch.name}</option>))}
-            </select>
+            <Select
+                id="branchId"
+                name="branchId"
+                options={branches.map(b => ({value: b.id, label: b.name}))}
+                value={branches.map(b => ({value: b.id, label: b.name})).find(o => o.value === formData.branchId)}
+                onChange={(option) => handleSelectChange('branchId', option)}
+                placeholder="Select a branch"
+                className="w-full"
+            />
           </div>
 
           <div>
@@ -431,20 +423,36 @@ const EditStudentForm: React.FC = () => {
             <label htmlFor="membershipEnd" className="block text-sm font-medium text-gray-700 mb-1">Membership End</label>
             <input type="date" id="membershipEnd" name="membershipEnd" value={formData.membershipEnd} onChange={handleChange} required className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300"/>
           </div>
-
+          
           <div>
-            <label htmlFor="shiftId" className="block text-sm font-medium text-gray-700 mb-1">Select Shift</label>
-            <select id="shiftId" name="shiftId" value={formData.shiftId} onChange={handleChange} className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-300">
-              <option value="">-- Select Shift --</option>
-              {shifts.map((shift) => (<option key={shift.id} value={shift.id}>{shift.title} at {shift.time} ({shift.eventDate})</option>))}
-            </select>
+            <label htmlFor="seatId" className="block text-sm font-medium text-gray-700 mb-1">Select Seat</label>
+            <Select
+              id="seatId"
+              name="seatId"
+              options={seatOptions}
+              isLoading={loadingSeats}
+              value={seatOptions.find(option => option.value === formData.seatId)}
+              onChange={(option) => handleSelectChange('seatId', option)}
+              isSearchable
+              placeholder="Select a seat or None"
+              className="w-full"
+            />
           </div>
 
           <div>
-            <label htmlFor="seatId" className="block text-sm font-medium text-gray-700 mb-1">Select Seat</label>
-            {loadingSeats ? (<div>Loading seats...</div>) : (
-              <Select id="seatId" name="seatId" options={seatOptions} value={seatOptions.find((option) => option.value === formData.seatId)} onChange={(selected) => setFormData((prev) => ({...prev, seatId: selected ? selected.value : null,}))} isSearchable placeholder="Select a seat or None" className="w-full"/>
-            )}
+            <label htmlFor="shiftIds" className="block text-sm font-medium text-gray-700 mb-1">Select Shift(s)</label>
+            <Select
+                isMulti
+                id="shiftIds"
+                name="shiftIds"
+                options={shiftOptions}
+                value={shiftOptions.filter(option => formData.shiftIds.includes(option.value))}
+                onChange={handleShiftSelectChange}
+                isLoading={loadingShifts}
+                isOptionDisabled={(option) => option.isDisabled ?? false}
+                placeholder="Select one or more shifts"
+                className="w-full"
+            />
           </div>
           
           <div>
@@ -488,7 +496,7 @@ const EditStudentForm: React.FC = () => {
           </div>
           
           <div className="flex space-x-4">
-            <Button variant="outline" onClick={handleCancel} className="w-full" disabled={submitting}>Cancel</Button>
+            <Button variant="outline" onClick={() => navigate(-1)} className="w-full" disabled={submitting}>Cancel</Button>
             <Button onClick={handleSubmit} disabled={submitting} className="w-full bg-purple-600 text-white py-2 px-4 rounded-lg hover:bg-purple-700 transition duration-200 disabled:bg-purple-400">
               {submitting ? 'Updating...' : 'Update Student'}
             </Button>

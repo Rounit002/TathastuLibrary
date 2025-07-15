@@ -128,13 +128,6 @@ const StudentDetails: React.FC = () => {
   if (error) return <div>{error}</div>;
   if (!student) return <div>Student not found</div>;
 
-  const shiftTitle = student.assignments && student.assignments.length > 0
-    ? student.assignments[0].shiftTitle
-    : undefined;
-  const seatNumber = student.assignments && student.assignments.length > 0
-    ? student.assignments[0].seatNumber
-    : undefined;
-
   return (
     <>
       <style>
@@ -253,14 +246,22 @@ const StudentDetails: React.FC = () => {
                     <p className="text-gray-600">{formatDate(student.membershipEnd)}</p>
                   </div>
                   <div>
-                    <h2 className="text-lg font-medium">Assigned Shift</h2>
-                    <p className="text-gray-600">
-                      {shiftTitle || 'No shift assigned'}
-                    </p>
-                  </div>
-                  <div>
                     <h2 className="text-lg font-medium">Seat Number</h2>
-                    <p className="text-gray-600">{seatNumber || 'None'}</p>
+                    <p className="text-gray-600">{student.assignments?.[0]?.seatNumber || 'None'}</p>
+                  </div>
+                  <div className="md:col-span-2">
+                    <h2 className="text-lg font-medium">Assigned Shifts</h2>
+                    {student.assignments && student.assignments.length > 0 ? (
+                      <div className="flex flex-wrap gap-2 mt-1">
+                        {student.assignments.map((assignment) => (
+                          <span key={assignment.shiftId} className="px-3 py-1 bg-purple-100 text-purple-800 text-sm font-medium rounded-full">
+                            {assignment.shiftTitle || 'Unnamed Shift'}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-600">No shifts assigned</p>
+                    )}
                   </div>
                   <div>
                     <h2 className="text-lg font-medium">Total Fee</h2>
